@@ -36,80 +36,38 @@ func NewBinaryParser() *BinaryParser {
 
 // ParseWalMessage parse postgres WAL message.
 // https://www.postgresql.org/docs/13/protocol-logicalrep-message-formats.html
-func (p *BinaryParser) ParseWalMessage(msg []byte) error {
+func (p *BinaryParser) ParseWalMessage(msg []byte) (interface{}, error) {
+	var ret interface{}
 	if len(msg) == 0 {
-		return errEmptyWALMessage
+		return ret, errEmptyWALMessage
 	}
 	p.msgType = msg[0]
 	p.buffer = bytes.NewBuffer(msg[1:])
 	switch p.msgType {
 	case protocol.BeginMsgType:
 		fmt.Println("Begin: ", p.msgType)
-		break
-		begin := p.getBeginMsg()
-		logrus.
-			WithFields(
-				logrus.Fields{
-					"lsn": begin.LSN,
-					"xid": begin.XID,
-				}).
-			Infoln("receive begin message")
+		ret = p.getBeginMsg()
 	case protocol.CommitMsgType:
 		fmt.Println("Commit: ", p.msgType)
-		break
-		commit := p.getCommitMsg()
-		logrus.
-			WithFields(
-				logrus.Fields{
-					"lsn":             commit.LSN,
-					"transaction_lsn": commit.TransactionLSN,
-				}).
-			Infoln("receive commit message")
+		ret = p.getCommitMsg()
 	case protocol.OriginMsgType:
 		logrus.Infoln("receive origin message")
 	case protocol.RelationMsgType:
 		fmt.Println("Relation: ", p.msgType)
-		break
-		relation := p.getRelationMsg()
-		logrus.
-			WithFields(
-				logrus.Fields{
-					"relation_id": relation.ID,
-					"replica":     relation.Replica,
-				}).
-			Infoln("receive relation message")
+		ret = p.getRelationMsg()
 	case protocol.TypeMsgType:
 		logrus.Infoln("type")
 	case protocol.InsertMsgType:
-		insert := p.getInsertMsg()
-		logrus.
-			WithFields(
-				logrus.Fields{
-					"relation_id": insert.RelationID,
-				}).
-			Infoln("receive insert message")
+		ret = p.getInsertMsg()
 	case protocol.UpdateMsgType:
 		fmt.Println("Update: ", p.msgType)
-		upd := p.getUpdateMsg()
-		logrus.
-			WithFields(
-				logrus.Fields{
-					"relation_id": upd.RelationID,
-				}).
-			Infoln("receive update message")
-		fmt.Println("Update: ", upd)
+		ret = p.getUpdateMsg()
 	case protocol.DeleteMsgType:
-		del := p.getDeleteMsg()
-		logrus.
-			WithFields(
-				logrus.Fields{
-					"relation_id": del.RelationID,
-				}).
-			Infoln("receive delete message")
+		ret = p.getDeleteMsg()
 	default:
-		return fmt.Errorf("%w : %s", errUnknownMessageType, []byte{p.msgType})
+		return ret, fmt.Errorf("%w : %s", errUnknownMessageType, []byte{p.msgType})
 	}
-	return nil
+	return ret, nil
 }
 
 func (p *BinaryParser) getBeginMsg() protocol.Begin {
@@ -147,7 +105,6 @@ func (p *BinaryParser) getDeleteMsg() protocol.Delete {
 }
 
 func (p *BinaryParser) getUpdateMsg() protocol.Update {
-	fmt.Println("getUpdateMsg:")
 	u := protocol.Update{}
 	u.RelationID = p.readInt32()
 	u.KeyTuple = p.charIsExists('K')
@@ -211,7 +168,6 @@ func (p *BinaryParser) readBool() bool {
 
 func (p *BinaryParser) charIsExists(char byte) bool {
 	x := p.buffer.Next(1)[0]
-	fmt.Println("x: ", x)
 	if x == char {
 		return true
 	}
@@ -234,12 +190,10 @@ func (p *BinaryParser) readColumns() []protocol.RelationColumn {
 }
 
 func (p *BinaryParser) readTupleData() []protocol.TupleData {
-	fmt.Println("readTupleData:")
 	size := int(p.readInt16())
 	data := make([]protocol.TupleData, size)
 	for i := 0; i < size; i++ {
 		sl := p.buffer.Next(1)
-		fmt.Println("%v", sl)
 		switch sl[0] {
 		case protocol.NullDataType:
 			logrus.Debugln("tupleData: null data type")
@@ -249,7 +203,6 @@ func (p *BinaryParser) readTupleData() []protocol.TupleData {
 		case protocol.TextDataType:
 			vsize := int(p.readInt32())
 			data[i] = protocol.TupleData{Value: p.buffer.Next(vsize)}
-			fmt.Println("text: ", string(data[i].Value))
 		}
 	}
 	return data
