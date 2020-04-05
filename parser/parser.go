@@ -28,9 +28,9 @@ type BinaryParser struct {
 }
 
 // NewBinaryParser create instance of binary parser.
-func NewBinaryParser(byteOrder binary.ByteOrder) *BinaryParser {
+func NewBinaryParser() *BinaryParser {
 	return &BinaryParser{
-		byteOrder: byteOrder,
+		byteOrder: binary.BigEndian,
 	}
 }
 
@@ -147,8 +147,9 @@ func (p *BinaryParser) getDeleteMsg() protocol.Delete {
 }
 
 func (p *BinaryParser) getUpdateMsg() protocol.Update {
+	fmt.Println("getUpdateMsg:")
 	u := protocol.Update{}
-	// u.RelationID = p.readInt32()
+	u.RelationID = p.readInt32()
 	u.KeyTuple = p.charIsExists('K')
 	u.OldTuple = p.charIsExists('O')
 	if u.KeyTuple || u.OldTuple {
@@ -209,7 +210,9 @@ func (p *BinaryParser) readBool() bool {
 }
 
 func (p *BinaryParser) charIsExists(char byte) bool {
-	if p.buffer.Next(1)[0] == char {
+	x := p.buffer.Next(1)[0]
+	fmt.Println("x: ", x)
+	if x == char {
 		return true
 	}
 	_ = p.buffer.UnreadByte()
@@ -231,10 +234,12 @@ func (p *BinaryParser) readColumns() []protocol.RelationColumn {
 }
 
 func (p *BinaryParser) readTupleData() []protocol.TupleData {
+	fmt.Println("readTupleData:")
 	size := 4 // int(p.readInt16())
 	data := make([]protocol.TupleData, size)
 	for i := 0; i < size; i++ {
 		sl := p.buffer.Next(1)
+		fmt.Println("%v", sl)
 		switch sl[0] {
 		case protocol.NullDataType:
 			logrus.Debugln("tupleData: null data type")
@@ -242,10 +247,9 @@ func (p *BinaryParser) readTupleData() []protocol.TupleData {
 			logrus.Debugln(
 				"tupleData: toast data type")
 		case protocol.TextDataType:
-			vsize := int(p.readInt32())
+			vsize := int(p.readInt8())
 			data[i] = protocol.TupleData{Value: p.buffer.Next(vsize)}
-		default:
-			break
+			fmt.Println("text: ", data[i])
 		}
 	}
 	return data
