@@ -14,7 +14,7 @@ import (
 func main() {
 	//	const outputPlugin = "test_decoding"
 	const outputPlugin = "pgoutput"
-	conn, err := pgconn.Connect(context.Background(), os.Getenv("PGLOGREPL_DEMO_CONN_STRING"))
+	conn, err := pgconn.Connect(context.Background(), os.Getenv("PGLOGREPL_MBIP_CONN_STRING"))
 	if err != nil {
 		log.Fatalln("failed to connect to PostgreSQL server:", err)
 	}
@@ -22,20 +22,20 @@ func main() {
 
 	var pluginArguments []string
 	if outputPlugin == "pgoutput" {
-		result := conn.Exec(context.Background(), "DROP PUBLICATION IF EXISTS pglogrepl_demo;")
+		result := conn.Exec(context.Background(), "DROP PUBLICATION IF EXISTS pglogrepl_mbip;")
 		_, err := result.ReadAll()
 		if err != nil {
 			log.Fatalln("drop publication if exists error", err)
 		}
 
-		result = conn.Exec(context.Background(), "CREATE PUBLICATION pglogrepl_demo FOR ALL TABLES;")
+		result = conn.Exec(context.Background(), "CREATE PUBLICATION pglogrepl_mbip FOR ALL TABLES;")
 		_, err = result.ReadAll()
 		if err != nil {
 			log.Fatalln("create publication error", err)
 		}
-		log.Println("create publication pglogrepl_demo")
+		log.Println("create publication pglogrepl_mbip")
 
-		pluginArguments = []string{"proto_version '1'", "publication_names 'pglogrepl_demo'"}
+		pluginArguments = []string{"proto_version '1'", "publication_names 'pglogrepl_mbip'"}
 	}
 
 	sysident, err := pglogrepl.IdentifySystem(context.Background(), conn)
@@ -44,7 +44,7 @@ func main() {
 	}
 	log.Println("SystemID:", sysident.SystemID, "Timeline:", sysident.Timeline, "XLogPos:", sysident.XLogPos, "DBName:", sysident.DBName)
 
-	slotName := "pglogrepl_demo"
+	slotName := "pglogrepl_mbip"
 
 	_, err = pglogrepl.CreateReplicationSlot(context.Background(), conn, slotName, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
 	if err != nil {
