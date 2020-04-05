@@ -235,7 +235,7 @@ func (p *BinaryParser) readColumns() []protocol.RelationColumn {
 
 func (p *BinaryParser) readTupleData() []protocol.TupleData {
 	fmt.Println("readTupleData:")
-	size := 4 // int(p.readInt16())
+	size := int(p.readInt16())
 	data := make([]protocol.TupleData, size)
 	for i := 0; i < size; i++ {
 		sl := p.buffer.Next(1)
@@ -247,9 +247,9 @@ func (p *BinaryParser) readTupleData() []protocol.TupleData {
 			logrus.Debugln(
 				"tupleData: toast data type")
 		case protocol.TextDataType:
-			vsize := int(p.readInt8())
+			vsize := int(p.readInt32())
 			data[i] = protocol.TupleData{Value: p.buffer.Next(vsize)}
-			fmt.Println("text: ", data[i])
+			fmt.Println("text: ", string(data[i].Value))
 		}
 	}
 	return data
