@@ -35,6 +35,7 @@ func NewBinaryParser(byteOrder binary.ByteOrder) *BinaryParser {
 }
 
 // ParseWalMessage parse postgres WAL message.
+// https://www.postgresql.org/docs/13/protocol-logicalrep-message-formats.html
 func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 	if len(msg) == 0 {
 		return errEmptyWALMessage
@@ -89,7 +90,6 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 			Infoln("receive insert message")
 	case protocol.UpdateMsgType:
 		fmt.Println("Update: ", p.msgType)
-		break
 		upd := p.getUpdateMsg()
 		logrus.
 			WithFields(
@@ -97,6 +97,7 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 					"relation_id": upd.RelationID,
 				}).
 			Infoln("receive update message")
+		fmt.Println("Update: ", upd)
 	case protocol.DeleteMsgType:
 		del := p.getDeleteMsg()
 		logrus.
@@ -147,7 +148,7 @@ func (p *BinaryParser) getDeleteMsg() protocol.Delete {
 
 func (p *BinaryParser) getUpdateMsg() protocol.Update {
 	u := protocol.Update{}
-	u.RelationID = p.readInt32()
+	// u.RelationID = p.readInt32()
 	u.KeyTuple = p.charIsExists('K')
 	u.OldTuple = p.charIsExists('O')
 	if u.KeyTuple || u.OldTuple {
@@ -230,7 +231,7 @@ func (p *BinaryParser) readColumns() []protocol.RelationColumn {
 }
 
 func (p *BinaryParser) readTupleData() []protocol.TupleData {
-	size := int(p.readInt16())
+	size := 4 // int(p.readInt16())
 	data := make([]protocol.TupleData, size)
 	for i := 0; i < size; i++ {
 		sl := p.buffer.Next(1)
@@ -243,6 +244,8 @@ func (p *BinaryParser) readTupleData() []protocol.TupleData {
 		case protocol.TextDataType:
 			vsize := int(p.readInt32())
 			data[i] = protocol.TupleData{Value: p.buffer.Next(vsize)}
+		default:
+			break
 		}
 	}
 	return data
