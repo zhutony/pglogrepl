@@ -102,7 +102,7 @@ func main() {
 					log.Fatalln("ParseXLogData failed:", err)
 				}
 				log.Println("XLogData =>", "[ ", xld.WALStart, " ~ ", xld.ServerWALEnd, " ] ServerTime:", xld.ServerTime, " WALData: ", string(xld.WALData))
-				parser BinaryParser
+				var parser BinaryParser
 				err := parser.ParseWalMessage(xld.WALData)
 		   	        if err != nil {
 				    panic(err)
