@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"time"
-	"text/template"
+//	"text/template"
 
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pglogrepl"
@@ -101,18 +101,24 @@ func main() {
 				if err != nil {
 					log.Fatalln("ParseXLogData failed:", err)
 				}
-				log.Println("XLogData =>", "WALStart", xld.WALStart, "ServerWALEnd", xld.ServerWALEnd, "ServerTime:", xld.ServerTime, "WALData", string(xld.WALData))
+				log.Println("XLogData =>", "[ ", xld.WALStart, " ~ ", xld.ServerWALEnd, " ] ServerTime:", xld.ServerTime, " WALData: ", string(xld.WALData))
+				parser BinaryParser
+				err := parser.ParseWalMessage(xld.WALData)
+		   	        if err != nil {
+				    panic(err)
+			        }
+				log.Println("wal data: ", parser)
 				type Socket struct {
 					IP string
 					Port uint
 				}
-			       	members := []Socket{{"wool", 17}}
+			       	/* members := []Socket{{"wool", 17}}
 			       	tmpl, err := template.New("test").Parse(`pool pool1 {
 					{{range .}}member {{.IP}} {{.Port}}\n{{end}}
 									 }`)
 			       	if err != nil { panic(err) }
 			       	err = tmpl.Execute(os.Stdout, members)
-			       	if err != nil { panic(err) }
+			       	if err != nil { panic(err) }*/
 
 				clientXLogPos = xld.WALStart + pglogrepl.LSN(len(xld.WALData))
 			}
