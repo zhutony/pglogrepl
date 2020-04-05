@@ -43,6 +43,8 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 	p.buffer = bytes.NewBuffer(msg[1:])
 	switch p.msgType {
 	case protocol.BeginMsgType:
+		fmt.Println("Begin: ", p.msgType)
+		break
 		begin := p.getBeginMsg()
 		logrus.
 			WithFields(
@@ -52,6 +54,8 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 				}).
 			Infoln("receive begin message")
 	case protocol.CommitMsgType:
+		fmt.Println("Commit: ", p.msgType)
+		break
 		commit := p.getCommitMsg()
 		logrus.
 			WithFields(
@@ -63,6 +67,8 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 	case protocol.OriginMsgType:
 		logrus.Infoln("receive origin message")
 	case protocol.RelationMsgType:
+		fmt.Println("Relation: ", p.msgType)
+		break
 		relation := p.getRelationMsg()
 		logrus.
 			WithFields(
@@ -82,6 +88,8 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 				}).
 			Infoln("receive insert message")
 	case protocol.UpdateMsgType:
+		fmt.Println("Update: ", p.msgType)
+		break
 		upd := p.getUpdateMsg()
 		logrus.
 			WithFields(
