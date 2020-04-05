@@ -112,7 +112,7 @@ func (p *BinaryParser) getUpdateMsg() protocol.Update {
 	if u.KeyTuple || u.OldTuple {
 		u.OldRow = p.readTupleData()
 	}
-	u.OldTuple = p.charIsExists('N')
+	u.NewTuple = p.charIsExists('N')
 	u.Row = p.readTupleData()
 	return u
 }
