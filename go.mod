@@ -1,6 +1,6 @@
 module github.com/jackc/pglogrepl
 
-go 1.12
+go 1.14
 
 require (
 	github.com/jackc/pgconn v1.1.0

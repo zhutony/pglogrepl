@@ -1,12 +1,23 @@
-package pglogrepl
+package parser
 
 import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"time"
+        "errors"
+	"github.com/jackc/pglogrepl/protocol"
 
 	"github.com/sirupsen/logrus"
+)
+
+// Variable with connection errors.
+var (
+	errReplConnectionIsLost = errors.New("replication connection to postgres is lost")
+	errConnectionIsLost     = errors.New("db connection to postgres is lost")
+	errMessageLost          = errors.New("messages are lost")
+	errEmptyWALMessage      = errors.New("empty WAL message")
+	errUnknownMessageType   = errors.New("unknown message type")
 )
 
 // BinaryParser represent binary protocol parser.
@@ -31,7 +42,7 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 	p.msgType = msg[0]
 	p.buffer = bytes.NewBuffer(msg[1:])
 	switch p.msgType {
-	case BeginMsgType:
+	case protocol.BeginMsgType:
 		begin := p.getBeginMsg()
 		logrus.
 			WithFields(
@@ -40,7 +51,7 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 					"xid": begin.XID,
 				}).
 			Infoln("receive begin message")
-	case CommitMsgType:
+	case protocol.CommitMsgType:
 		commit := p.getCommitMsg()
 		logrus.
 			WithFields(
@@ -49,9 +60,9 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 					"transaction_lsn": commit.TransactionLSN,
 				}).
 			Infoln("receive commit message")
-	case OriginMsgType:
+	case protocol.OriginMsgType:
 		logrus.Infoln("receive origin message")
-	case RelationMsgType:
+	case protocol.RelationMsgType:
 		relation := p.getRelationMsg()
 		logrus.
 			WithFields(
@@ -60,22 +71,9 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 					"replica":     relation.Replica,
 				}).
 			Infoln("receive relation message")
-		rd := RelationData{
-			Schema: relation.Namespace,
-			Table:  relation.Name,
-		}
-		for _, rf := range relation.Columns {
-			c := Column{
-				name:      rf.Name,
-				valueType: int(rf.TypeID),
-				isKey:     rf.Key,
-			}
-			rd.Columns = append(rd.Columns, c)
-		}
-
-	case TypeMsgType:
+	case protocol.TypeMsgType:
 		logrus.Infoln("type")
-	case InsertMsgType:
+	case protocol.InsertMsgType:
 		insert := p.getInsertMsg()
 		logrus.
 			WithFields(
@@ -83,10 +81,7 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 					"relation_id": insert.RelationID,
 				}).
 			Infoln("receive insert message")
-		if err != nil {
-			return fmt.Errorf("create action data: %w", err)
-		}
-	case UpdateMsgType:
+	case protocol.UpdateMsgType:
 		upd := p.getUpdateMsg()
 		logrus.
 			WithFields(
@@ -94,10 +89,7 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 					"relation_id": upd.RelationID,
 				}).
 			Infoln("receive update message")
-		if err != nil {
-			return fmt.Errorf("create action data: %w", err)
-		}
-	case DeleteMsgType:
+	case protocol.DeleteMsgType:
 		del := p.getDeleteMsg()
 		logrus.
 			WithFields(
@@ -105,25 +97,22 @@ func (p *BinaryParser) ParseWalMessage(msg []byte) error {
 					"relation_id": del.RelationID,
 				}).
 			Infoln("receive delete message")
-		if err != nil {
-			return fmt.Errorf("create action data: %w", err)
-		}
 	default:
 		return fmt.Errorf("%w : %s", errUnknownMessageType, []byte{p.msgType})
 	}
 	return nil
 }
 
-func (p *BinaryParser) getBeginMsg() Begin {
-	return Begin{
+func (p *BinaryParser) getBeginMsg() protocol.Begin {
+	return protocol.Begin{
 		LSN:       p.readInt64(),
 		Timestamp: p.readTimestamp(),
 		XID:       p.readInt32(),
 	}
 }
 
-func (p *BinaryParser) getCommitMsg() Commit {
-	return Commit{
+func (p *BinaryParser) getCommitMsg() protocol.Commit {
+	return protocol.Commit{
 		Flags:          p.readInt8(),
 		LSN:            p.readInt64(),
 		TransactionLSN: p.readInt64(),
@@ -131,16 +120,16 @@ func (p *BinaryParser) getCommitMsg() Commit {
 	}
 }
 
-func (p *BinaryParser) getInsertMsg() Insert {
-	return Insert{
+func (p *BinaryParser) getInsertMsg() protocol.Insert {
+	return protocol.Insert{
 		RelationID: p.readInt32(),
-		NewTuple:   p.buffer.Next(1)[0] == NewTupleDataType,
+		NewTuple:   p.buffer.Next(1)[0] == protocol.NewTupleDataType,
 		Row:        p.readTupleData(),
 	}
 }
 
-func (p *BinaryParser) getDeleteMsg() Delete {
-	return Delete{
+func (p *BinaryParser) getDeleteMsg() protocol.Delete {
+	return protocol.Delete{
 		RelationID: p.readInt32(),
 		KeyTuple:   p.charIsExists('K'),
 		OldTuple:   p.charIsExists('O'),
@@ -148,8 +137,8 @@ func (p *BinaryParser) getDeleteMsg() Delete {
 	}
 }
 
-func (p *BinaryParser) getUpdateMsg() Update {
-	u := Update{}
+func (p *BinaryParser) getUpdateMsg() protocol.Update {
+	u := protocol.Update{}
 	u.RelationID = p.readInt32()
 	u.KeyTuple = p.charIsExists('K')
 	u.OldTuple = p.charIsExists('O')
@@ -161,8 +150,8 @@ func (p *BinaryParser) getUpdateMsg() Update {
 	return u
 }
 
-func (p *BinaryParser) getRelationMsg() Relation {
-	return Relation{
+func (p *BinaryParser) getRelationMsg() protocol.Relation {
+	return protocol.Relation{
 		ID:        p.readInt32(),
 		Namespace: p.readString(),
 		Name:      p.readString(),
@@ -197,7 +186,7 @@ func (p *BinaryParser) readInt16() (val int16) {
 
 func (p *BinaryParser) readTimestamp() time.Time {
 	ns := p.readInt64()
-	return postgresEpoch.Add(time.Duration(ns) * time.Microsecond)
+	return protocol.PostgresEpoch.Add(time.Duration(ns) * time.Microsecond)
 }
 
 func (p *BinaryParser) readString() (str string) {
@@ -218,11 +207,11 @@ func (p *BinaryParser) charIsExists(char byte) bool {
 	return false
 }
 
-func (p *BinaryParser) readColumns() []RelationColumn {
+func (p *BinaryParser) readColumns() []protocol.RelationColumn {
 	size := int(p.readInt16())
-	data := make([]RelationColumn, size)
+	data := make([]protocol.RelationColumn, size)
 	for i := 0; i < size; i++ {
-		data[i] = RelationColumn{
+		data[i] = protocol.RelationColumn{
 			Key:          p.readBool(),
 			Name:         p.readString(),
 			TypeID:       p.readInt32(),
@@ -232,20 +221,20 @@ func (p *BinaryParser) readColumns() []RelationColumn {
 	return data
 }
 
-func (p *BinaryParser) readTupleData() []TupleData {
+func (p *BinaryParser) readTupleData() []protocol.TupleData {
 	size := int(p.readInt16())
-	data := make([]TupleData, size)
+	data := make([]protocol.TupleData, size)
 	for i := 0; i < size; i++ {
 		sl := p.buffer.Next(1)
 		switch sl[0] {
-		case NullDataType:
+		case protocol.NullDataType:
 			logrus.Debugln("tupleData: null data type")
-		case ToastDataType:
+		case protocol.ToastDataType:
 			logrus.Debugln(
 				"tupleData: toast data type")
-		case TextDataType:
+		case protocol.TextDataType:
 			vsize := int(p.readInt32())
-			data[i] = TupleData{Value: p.buffer.Next(vsize)}
+			data[i] = protocol.TupleData{Value: p.buffer.Next(vsize)}
 		}
 	}
 	return data

@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 //	"text/template"
+	"pglogrepl"
 
 	"github.com/jackc/pgconn"
-	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgproto3/v2"
 )
 
